@@ -603,4 +603,9 @@ class Account implements PlatformAccountInterface
             ];
         }
     }
+
+    public function getScopes(string $type = 'auth'): array
+    {
+        return [];
+    }
 }

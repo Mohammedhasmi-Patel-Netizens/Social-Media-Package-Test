@@ -2,32 +2,32 @@
 
 namespace BeePost\SocialPoster\Services\Account\youtube;
 
+use BeePost\SocialPoster\Contracts\PlatformAccountInterface;
+use BeePost\SocialPoster\Enums\AccountType;
 use BeePost\SocialPoster\Enums\ConnectionType;
 use BeePost\SocialPoster\Enums\PostType;
-use BeePost\SocialPoster\Traits\AccountManager;
-use BeePost\SocialPoster\Enums\AccountType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
-use BeePost\SocialPoster\Contracts\PlatformAccountInterface;
-use Illuminate\Support\Arr;
+use BeePost\SocialPoster\Traits\AccountManager;
+use Carbon\Carbon;
 use Exception;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\File;
 
 class Account implements PlatformAccountInterface
 {
-
-
     use AccountManager;
 
-    public $ytUrl, $params;
+    public $ytUrl;
+
+    public $params;
 
     const BASE_URL = 'https://www.youtube.com';
+
     const API_URL = 'https://www.googleapis.com/youtube';
+
     const UPLOAD_URL = 'https://www.googleapis.com/upload/youtube';
-
-
-
 
     public function __construct()
     {
@@ -38,21 +38,17 @@ class Account implements PlatformAccountInterface
         ];
     }
 
-
-
-
-
     /**
      * Summary of authRedirect
-     * @param \App\Models\MediaPlatform $mediaPlatform
-     * @return string
+     *
+     * @param  \App\Models\MediaPlatform  $mediaPlatform
      */
     public static function authRedirect(mixed $mediaPlatform): string
     {
         $configuration = $mediaPlatform->configuration;
 
         $client_id = $configuration->client_id;
-        $redirect_uri = url('/account/youtube/callback?medium=' . $mediaPlatform->slug);
+        $redirect_uri = url('/account/youtube/callback?medium='.$mediaPlatform->slug);
         $scope = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly';
         $state = bin2hex(random_bytes(16));
         $code_verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
@@ -61,7 +57,7 @@ class Account implements PlatformAccountInterface
 
         session(['youtube_code_verifier' => $code_verifier]);
 
-        $auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" . http_build_query([
+        $auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?'.http_build_query([
             'client_id' => $client_id,
             'redirect_uri' => $redirect_uri,
             'response_type' => 'code',
@@ -76,17 +72,12 @@ class Account implements PlatformAccountInterface
         return $auth_url;
     }
 
-
-
     /**
      * Summary of getApiUrl
-     * @param string $endpoint
-     * @param array $params
-     * @param mixed $configuration
-     * @param bool $isBaseUrl
+     *
      * @return mixed
      */
-    public static function getApiUrl(string $endpoint, array $params = [], mixed $configuration, bool $isBaseUrl = false, bool $isUpload = false): string
+    public static function getApiUrl(string $endpoint, array $params, mixed $configuration, bool $isBaseUrl = false, bool $isUpload = false): string
     {
         $apiUrl = $isBaseUrl ? self::BASE_URL : ($isUpload ? self::UPLOAD_URL : self::API_URL);
 
@@ -96,25 +87,21 @@ class Account implements PlatformAccountInterface
 
         $v = $configuration->app_version ?? 'v3';
 
-        $versionedUrlWithEndpoint = $apiUrl . '/' . ($v ? ($v . '/') : '') . $endpoint;
+        $versionedUrlWithEndpoint = $apiUrl.'/'.($v ? ($v.'/') : '').$endpoint;
 
-        if (!empty($params)) {
-            $versionedUrlWithEndpoint .= '?' . http_build_query($params);
+        if (! empty($params)) {
+            $versionedUrlWithEndpoint .= '?'.http_build_query($params);
         }
 
         return $versionedUrlWithEndpoint;
     }
 
-
-
-
-
     /**
      * Summary of getAccessToken
-     * @param string $code
-     * @param \App\Models\MediaPlatform $mediaPlatform
-     * @param string|null $state - The state parameter from callback (unused, kept for compatibility)
-     * @return \Illuminate\Http\Client\Response
+     *
+     * @param  \App\Models\MediaPlatform  $mediaPlatform
+     * @param  string|null  $state  - The state parameter from callback (unused, kept for compatibility)
+     * @return Response
      */
     public static function getAccessToken(string $code, mixed $mediaPlatform, ?string $state = null)
     {
@@ -122,12 +109,12 @@ class Account implements PlatformAccountInterface
 
         $client_id = $configuration->client_id;
         $client_secret = $configuration->client_secret;
-        $redirect_uri = url('/account/youtube/callback?medium=' . $mediaPlatform->slug);
+        $redirect_uri = url('/account/youtube/callback?medium='.$mediaPlatform->slug);
 
         // Get code_verifier from session
         $code_verifier = session('youtube_code_verifier');
 
-        if (!$code_verifier) {
+        if (! $code_verifier) {
             throw new Exception('YouTube OAuth failed: code_verifier not found. Please try connecting again.');
         }
 
@@ -153,19 +140,16 @@ class Account implements PlatformAccountInterface
         } else {
             $errorBody = $response->json();
             $errorMsg = $errorBody['error_description'] ?? $errorBody['error'] ?? $response->body();
-            throw new Exception('Failed to get YouTube access token: ' . $errorMsg);
+            throw new Exception('Failed to get YouTube access token: '.$errorMsg);
         }
     }
 
-
-
     /**
      * Summary of refreshAccessToken
-     * @param \App\Models\MediaPlatform $mediaPlatform
-     * @param string $token
-     * @return \Illuminate\Http\Client\Response
+     *
+     * @param  \App\Models\MediaPlatform  $mediaPlatform
      */
-    public static function refreshAccessToken(mixed $mediaPlatform, string $token): \Illuminate\Http\Client\Response
+    public static function refreshAccessToken(mixed $mediaPlatform, string $token): Response
     {
         $configuration = $mediaPlatform->configuration;
         $client_id = $configuration->client_id;
@@ -183,15 +167,10 @@ class Account implements PlatformAccountInterface
         return Http::asForm()->post($apiUrl, $params);
     }
 
-
-
-
-
     /**
      * Summary of getAcccount
-     * @return \Illuminate\Http\Client\Response
      */
-    public function getAccount(string $token, mixed $mediaPlatform): \Illuminate\Http\Client\Response
+    public function getAccount(string $token, mixed $mediaPlatform): Response
     {
         $configuration = $mediaPlatform->configuration;
 
@@ -200,23 +179,14 @@ class Account implements PlatformAccountInterface
             'mine' => 'true',
         ], $configuration);
 
-
         return Http::withToken($token)->get($apiUrl);
     }
 
-
-
-
-
     /**
      * Summary of saveTwAccount
-     * @param mixed $pages
-     * @param string $guard
-     * @param \App\Models\MediaPlatform $mediaPlatform
-     * @param string $account_type
-     * @param string $is_official
-     * @param int|string $dbId
      *
+     * @param  mixed  $pages
+     * @param  \App\Models\MediaPlatform  $mediaPlatform
      */
     public static function saveYtAccount(
         mixed $responseData,
@@ -224,12 +194,11 @@ class Account implements PlatformAccountInterface
         mixed $mediaPlatform,
         string $account_type,
         string $is_official,
-        int|string $dbId = null
+        int|string|null $dbId = null
     ): mixed {
-        $yt = new self();
+        $yt = new self;
 
         $responseData = $responseData->json();
-
 
         $expireIn = Arr::get($responseData, 'expires_in');
         $token = Arr::get($responseData, 'access_token');
@@ -238,14 +207,12 @@ class Account implements PlatformAccountInterface
         $response = $yt->getAccount($token, $mediaPlatform);
         $apiResponse = $response->json();
 
-
-        if (!$response->successful() || !isset($apiResponse['items'][0])) {
+        if (! $response->successful() || ! isset($apiResponse['items'][0])) {
             $errorMsg = $apiResponse['error']['message'] ?? 'No YouTube channel found for this account';
-            throw new \Exception($errorMsg);
+            throw new Exception($errorMsg);
         }
 
         $channel = $apiResponse['items'][0];
-
 
         $accountInfo = [
             'id' => $channel['id'],
@@ -264,19 +231,13 @@ class Account implements PlatformAccountInterface
         return $response;
     }
 
-
-
-
-
-
     /**
      * Summary of getPost
-     * @param string $tweetId
-     * @param string $token
-     * @param \App\Models\MediaPlatform $mediaPlatform
-     * @return \Illuminate\Http\Client\Response
+     *
+     * @param  string  $tweetId
+     * @param  \App\Models\MediaPlatform  $mediaPlatform
      */
-    public static function getPost(string $videoId, string $token, mixed $mediaPlatform): \Illuminate\Http\Client\Response
+    public static function getPost(string $videoId, string $token, mixed $mediaPlatform): Response
     {
         $configuration = $mediaPlatform->configuration;
 
@@ -288,15 +249,10 @@ class Account implements PlatformAccountInterface
         return Http::withToken($token)->get($apiUrl);
     }
 
-
-
     /**
      * account connecton
      *
-     * @param MediaPlatform $platform
-     * @param array $request
-     * @param string $guard
-     * @return array
+     * @param  MediaPlatform  $platform
      */
     public function youtube(mixed $platform, array $request, string $guard = 'admin'): array
     {
@@ -311,8 +267,8 @@ class Account implements PlatformAccountInterface
             $access_token = Arr::get($request, 'access_token', null);
             $refresh_token = Arr::get($request, 'refresh_token', null);
 
-            if (!$access_token) {
-                throw new \Exception('No access token provided');
+            if (! $access_token) {
+                throw new Exception('No access token provided');
             }
 
             $config = [
@@ -331,7 +287,7 @@ class Account implements PlatformAccountInterface
                     $responseStatus = social_poster_response_status(social_poster_trans('Account Created'));
                     $config = array_merge($config, $channelData);
 
-                    $config['link'] = "https://www.youtube.com/channel/" . Arr::get($channelData, 'id');
+                    $config['link'] = 'https://www.youtube.com/channel/'.Arr::get($channelData, 'id');
                     $config['avatar'] = Arr::get($channelData, 'snippet.thumbnails.default.url');
                     $config['account_id'] = Arr::get($channelData, 'id');
 
@@ -345,19 +301,16 @@ class Account implements PlatformAccountInterface
                     );
                 }
             } else {
-                throw new \Exception('API request failed: ' . $response->body());
+                throw new Exception('API request failed: '.$response->body());
             }
 
-        } catch (\Exception $ex) {
+        } catch (Exception $ex) {
             $responseStatus = social_poster_response_status(social_poster_trans($ex->getMessage()), 'error');
-            \Log::error('YouTube Auth Error: ' . $ex->getMessage());
+            \Log::error('YouTube Auth Error: '.$ex->getMessage());
         }
 
         return $responseStatus;
     }
-
-
-
 
     public function send(SocialPost $post): array
     {
@@ -365,62 +318,61 @@ class Account implements PlatformAccountInterface
             $status = false;
             $message = 'Failed to post to YouTube!!! Configuration error';
 
-            $account        = $post->account;
-            $accountToken   = $account->token;
-            $platform       = @$account?->platform;
+            $account = $post->account;
+            $accountToken = $account->token;
+            $platform = @$account?->platform;
 
-            if (!$platform) {
-                throw new \Exception('No platform associated with account');
+            if (! $platform) {
+                throw new Exception('No platform associated with account');
             }
 
             $configuration = $platform->configuration;
-            $postDescription = $post->content ?: 'Test Video ' . time();
+            $postDescription = $post->content ?: 'Test Video '.time();
             $isShorts = $post->post_type === PostType::SHORTS->value;
 
             if ($post->link) {
-                $postDescription .= "\n" . $post->link;
+                $postDescription .= "\n".$post->link;
             }
 
             if ($isShorts) {
                 // Shorts
-                $title = substr($postDescription, 0, 97) . '...';
-                $description = $postDescription . "\n#Shorts";
+                $title = substr($postDescription, 0, 97).'...';
+                $description = $postDescription."\n#Shorts";
                 if (strlen($description) > 5000) {
-                    $description = substr($description, 0, 4997) . '...';
+                    $description = substr($description, 0, 4997).'...';
                 }
             } else {
                 // Regular video
                 if (strlen($postDescription) > 100) {
-                    $title = substr($postDescription, 0, 97) . '...';
+                    $title = substr($postDescription, 0, 97).'...';
                     $description = $postDescription;
                 } else {
                     $title = $postDescription;
                     $description = $postDescription;
                 }
                 if (strlen($description) > 5000) {
-                    $description = substr($description, 0, 4997) . '...';
+                    $description = substr($description, 0, 4997).'...';
                 }
             }
 
-
-            if (!$post->file || $post->file->count() === 0) {
+            if (! $post->file || $post->file->count() === 0) {
                 return [
                     'status' => false,
-                    'response' => 'YouTube requires a video file'
+                    'response' => 'YouTube requires a video file',
                 ];
             }
 
             $file = $post->file->first();
-            $filePath = public_path(filePath($file, "post"));
+            $filePath = public_path(filePath($file, 'post'));
 
-            if (!file_exists($filePath)) {
-                throw new \Exception('Video file not found: ' . $filePath);
+            if (! file_exists($filePath)) {
+                throw new Exception('Video file not found: '.$filePath);
             }
 
             $mimeType = mime_content_type($filePath);
             $allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-m4v', 'video/mpeg', 'video/3gpp'];
-            if (!in_array($mimeType, $allowedMimes)) {
-                throw new \Exception('Invalid video format: ' . $mimeType . '. YouTube requires MP4, MOV, AVI, WebM, or similar formats.');
+            if (! in_array($mimeType, $allowedMimes)) {
+                throw new Exception('Invalid video format: '.$mimeType.'. YouTube requires MP4, MOV, AVI, WebM, or similar formats.');
             }
 
             $apiUrl = self::getApiUrl('videos', ['part' => 'snippet,status'], $configuration, false, true); // Use UPLOAD_URL
@@ -434,31 +386,32 @@ class Account implements PlatformAccountInterface
                 ],
                 'status' => [
                     'privacyStatus' => 'public',
-                ]
+                ],
             ];
 
             $response = Http::withToken($accountToken)
-                          ->attach(
-                              'metadata',
-                              json_encode($payload),
-                              null,
-                              ['Content-Type' => 'application/json']
-                          )
-                          ->attach(
-                              'video',
-                              file_get_contents($filePath),
-                              basename($filePath),
-                              ['Content-Type' => $mimeType]
-                          )
-                          ->post($apiUrl);
+                ->attach(
+                    'metadata',
+                    json_encode($payload),
+                    null,
+                    ['Content-Type' => 'application/json']
+                )
+                ->attach(
+                    'video',
+                    file_get_contents($filePath),
+                    basename($filePath),
+                    ['Content-Type' => $mimeType]
+                )
+                ->post($apiUrl);
 
             $responseJson = $response->json();
 
             if ($response->successful() && isset($responseJson['id'])) {
                 $videoId = $responseJson['id'];
+
                 return [
                     'status' => true,
-                    'response' => social_poster_trans($isShorts ? "Short posted successfully to YouTube" : "Video posted successfully to YouTube"),
+                    'response' => social_poster_trans($isShorts ? 'Short posted successfully to YouTube' : 'Video posted successfully to YouTube'),
                     'url' => "https://www.youtube.com/watch?v={$videoId}",
                     'post_id' => $videoId,
                     'video_id' => $videoId,
@@ -471,16 +424,16 @@ class Account implements PlatformAccountInterface
                 return [
                     'status' => false,
                     'response' => social_poster_trans('YouTube API quota exceeded. Please try again tomorrow.'),
-                    'url' => null
+                    'url' => null,
                 ];
             }
 
             return [
                 'status' => false,
                 'response' => @$responseJson['error']['message'] ?? 'Failed to publish video',
-                'url' => null
+                'url' => null,
             ];
-        } catch (\Exception $ex) {
+        } catch (Exception $ex) {
             $status = false;
             $message = strip_tags($ex->getMessage());
         }
@@ -488,10 +441,9 @@ class Account implements PlatformAccountInterface
         return [
             'status' => $status,
             'response' => $message,
-            'url' => null
+            'url' => null,
         ];
     }
-
 
     public function accountDetails(SocialAccount $account): array
     {
@@ -507,11 +459,12 @@ class Account implements PlatformAccountInterface
             $channelResponse = Http::withToken($token)->get($channelUrl);
             $channelData = $channelResponse->json();
 
-            if (!$channelResponse->successful() || !isset($channelData['items'][0])) {
+            if (! $channelResponse->successful() || ! isset($channelData['items'][0])) {
                 $this->disConnectAccount($account);
+
                 return [
                     'status' => false,
-                    'message' => $channelData['error']['message'] ?? 'Failed to fetch channel data'
+                    'message' => $channelData['error']['message'] ?? 'Failed to fetch channel data',
                 ];
             }
 
@@ -527,16 +480,17 @@ class Account implements PlatformAccountInterface
             $response = Http::withToken($token)->get($apiUrl);
             $apiResponse = $response->json();
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 $this->disConnectAccount($account);
+
                 return [
                     'status' => false,
-                    'message' => $apiResponse['error']['message'] ?? 'Failed to fetch video list'
+                    'message' => $apiResponse['error']['message'] ?? 'Failed to fetch video list',
                 ];
             }
 
             // Optional: Fetch stats for likes and comments
-            $videoIds = array_map(fn($item) => $item['snippet']['resourceId']['videoId'], $apiResponse['items']);
+            $videoIds = array_map(fn ($item) => $item['snippet']['resourceId']['videoId'], $apiResponse['items']);
             $statsUrl = self::getApiUrl('videos', [
                 'part' => 'statistics',
                 'id' => implode(',', $videoIds),
@@ -544,24 +498,23 @@ class Account implements PlatformAccountInterface
             $statsResponse = Http::withToken($token)->get($statsUrl);
             $statsMap = array_column($statsResponse->json('items', []), null, 'id');
 
-
             $formattedResponse = $this->formatResponse($apiResponse, $statsMap);
 
             return [
                 'status' => true,
                 'response' => $formattedResponse,
             ];
-        } catch (\Exception $ex) {
+        } catch (Exception $ex) {
             return [
                 'status' => false,
-                'message' => strip_tags($ex->getMessage())
+                'message' => strip_tags($ex->getMessage()),
             ];
         }
     }
 
     protected function formatResponse(array $response, array $statsMap = []): array
     {
-        if (!isset($response['items']) || !is_array($response['items'])) {
+        if (! isset($response['items']) || ! is_array($response['items'])) {
             return [
                 'data' => [],
             ];
@@ -575,7 +528,7 @@ class Account implements PlatformAccountInterface
             return [
                 'full_picture' => $snippet['thumbnails']['default']['url'] ?? get_default_img(),
                 'message' => $snippet['description'] ?? $snippet['title'] ?? '',
-                'created_time' => $snippet['publishedAt'] ?? \Carbon\Carbon::now()->timestamp,
+                'created_time' => $snippet['publishedAt'] ?? Carbon::now()->timestamp,
                 'reactions' => [
                     'summary' => [
                         'total_count' => $stats['statistics']['likeCount'] ?? 0,
@@ -602,20 +555,15 @@ class Account implements PlatformAccountInterface
         ];
     }
 
-
     /**
      * Get insights/analytics for a YouTube video
-     *
-     * @param SocialPost $post
-     * @param SocialAccount $account
-     * @return array
      */
     public function getInsight(SocialPost $post, SocialAccount $account): array
     {
         try {
             $token = $account->token ?? $account->access_token ?? null;
 
-            if (!$token || !$post->platform_post_id) {
+            if (! $token || ! $post->platform_post_id) {
                 return [
                     'status' => false,
                     'message' => 'Missing access token or video ID',
@@ -624,7 +572,7 @@ class Account implements PlatformAccountInterface
             }
 
             // YouTube API: videos.list endpoint
-            $apiUrl = "https://www.googleapis.com/youtube/v3/videos";
+            $apiUrl = 'https://www.googleapis.com/youtube/v3/videos';
             $params = [
                 'id' => $post->platform_post_id,
                 'part' => 'statistics',
@@ -635,6 +583,7 @@ class Account implements PlatformAccountInterface
 
             if ($response->failed() || isset($data['error'])) {
                 $errorMsg = $data['error']['message'] ?? 'API request failed';
+
                 return [
                     'status' => false,
                     'message' => $errorMsg,
@@ -668,9 +617,20 @@ class Account implements PlatformAccountInterface
         } catch (\Throwable $e) {
             return [
                 'status' => false,
-                'message' => 'Error fetching YouTube metrics: ' . $e->getMessage(),
+                'message' => 'Error fetching YouTube metrics: '.$e->getMessage(),
                 'metrics' => [],
             ];
         }
+    }
+
+    /**
+     * Return required OAuth scopes.
+     */
+    public static function getScopes(string $type = 'auth'): array
+    {
+        return [
+            'https://www.googleapis.com/auth/youtube.upload',
+            'https://www.googleapis.com/auth/youtube.readonly',
+        ];
     }
 }

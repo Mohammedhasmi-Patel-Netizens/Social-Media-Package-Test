@@ -122,7 +122,7 @@ class Account implements PlatformAccountInterface
     /**
      * Get logged-in user info
      */
-    public function getAcccount(string $token, mixed $platform)
+    public static function getAcccount(string $token, mixed $platform)
     {
         $configuration = $platform->configuration;
 
@@ -137,7 +137,7 @@ class Account implements PlatformAccountInterface
     /**
      * Save Threads account
      */
-    public static function saveThAccount(
+    public  function saveThAccount(
         mixed $responseData,
         string $guard,
         mixed $platform,

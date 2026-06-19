@@ -2,6 +2,70 @@
 
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\OAuthController;
+use App\Http\Controllers\TikTokController;
+use App\Http\Controllers\TwitterController;
+use App\Http\Controllers\LinkedInController;
+
+
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/auth/youtube/redirect', [OAuthController::class, 'redirectToYoutube'])->name('youtube.redirect');
+Route::get('/account/youtube/callback', [OAuthController::class, 'handleYoutubeCallback'])->name('youtube.callback');
+
+use App\Http\Controllers\FacebookController;
+
+Route::get('/auth/facebook/redirect', [FacebookController::class, 'redirectToFacebook'])->name('facebook.redirect');
+Route::get('/account/facebook/callback', [FacebookController::class, 'handleFacebookCallback'])->name('facebook.callback');
+
+// Helper required by the package that isn't defined globally
+if (! function_exists('filePath')) {
+    function filePath($file, $context)
+    {
+        return $file->path; // Returns path relative to public folder
+    }
+}
+
+
+Route::get('/auth/tiktok/redirect', [TikTokController::class, 'redirectToTikTok'])->name('tiktok.redirect');
+Route::get('/account/tiktok/callback', [TikTokController::class, 'handleTikTokCallback'])->name('tiktok.callback');
+
+
+Route::get('/auth/twitter/redirect', [TwitterController::class, 'redirectToTwitter'])->name('twitter.redirect');
+Route::get('/account/twitter/callback', [TwitterController::class, 'handleTwitterCallback'])->name('twitter.callback');
+
+
+// Video upload routes (YouTube)
+Route::get('/upload-video', [OAuthController::class, 'showUploadForm'])->name('youtube.upload.form');
+Route::post('/upload-video', [OAuthController::class, 'uploadVideo'])->name('youtube.upload');
+
+// Facebook upload routes
+Route::get('/upload-facebook', [FacebookController::class, 'showUploadForm'])->name('facebook.upload.form');
+Route::post('/upload-facebook', [FacebookController::class, 'uploadPost'])->name('facebook.upload');
+
+// TikTok upload routes
+Route::get('/upload-tiktok', [TikTokController::class, 'showUploadForm'])->name('tiktok.upload.form');
+Route::post('/upload-tiktok', [TikTokController::class, 'uploadVideo'])->name('tiktok.upload');
+
+// Twitter upload routes
+Route::get('/upload-twitter', [TwitterController::class, 'showUploadForm'])->name('twitter.upload.form');
+Route::post('/upload-twitter', [TwitterController::class, 'uploadPost'])->name('twitter.upload');
+
+
+Route::get('/auth/linkedin/redirect', [LinkedInController::class, 'redirectToLinkedIn'])->name('linkedin.redirect');
+Route::get('/account/linkedin/callback', [LinkedInController::class, 'handleLinkedInCallback'])->name('linkedin.callback');
+
+// LinkedIn upload routes
+Route::get('/upload-linkedin', [LinkedInController::class, 'showUploadForm'])->name('linkedin.upload.form');
+Route::post('/upload-linkedin', [LinkedInController::class, 'uploadPost'])->name('linkedin.upload');
+
+use App\Http\Controllers\InstagramController;
+
+Route::get('/auth/instagram/redirect', [InstagramController::class, 'redirectToInstagram'])->name('instagram.redirect');
+Route::get('/account/instagram/callback', [InstagramController::class, 'handleInstagramCallback'])->name('instagram.callback');
+
+// Instagram upload routes
+Route::get('/upload-instagram', [InstagramController::class, 'showUploadForm'])->name('instagram.upload.form');
+Route::post('/upload-instagram', [InstagramController::class, 'uploadPost'])->name('instagram.upload');
