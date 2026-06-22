@@ -1,15 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Post to LinkedIn</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+@extends('layouts.app')
+@section('title', 'Post to LinkedIn')
+@section('content')
 
-    <div class="bg-white p-8 rounded-lg shadow-md max-w-lg w-full">
-        <h1 class="text-2xl font-bold mb-6 text-gray-800 text-center">Post to LinkedIn</h1>
+    <div class="glass-form-card p-8 rounded-3xl max-w-lg w-full text-slate-900 shadow-xl mt-8">
+        <h1 class="text-2xl font-bold mb-6 text-slate-900 drop-shadow-sm text-center">Post to LinkedIn</h1>
 
         @if (session('success'))
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6" role="alert">
@@ -30,14 +24,14 @@
             @csrf
 
             <div>
-                <label for="content" class="block text-sm font-medium text-gray-700">Post Content</label>
+                <label for="content" class="block text-sm font-medium text-slate-600">Post Content</label>
                 <textarea name="content" id="content" required rows="4" maxlength="2000"
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-600 focus:ring-blue-600 sm:text-sm p-2 border" 
                     placeholder="Share an update or article..."></textarea>
             </div>
 
             <div>
-                <label for="image" class="block text-sm font-medium text-gray-700">Select Image (Optional)</label>
+                <label for="image" class="block text-sm font-medium text-slate-600">Select Image (Optional)</label>
                 <input type="file" name="image" id="image" accept="image/*"
                     class="mt-1 block w-full text-sm text-gray-500
                     file:mr-4 file:py-2 file:px-4
@@ -53,5 +47,4 @@
         </form>
     </div>
 
-</body>
-</html>
+@endsection

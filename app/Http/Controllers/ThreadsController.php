@@ -2,15 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Core\File;
 use App\Models\MediaPlatform;
+use BeePost\SocialPoster\Enums\AccountType;
+use BeePost\SocialPoster\Enums\ConnectionType;
 use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
-use Illuminate\Http\Request;
 use BeePost\SocialPoster\Services\Account\threads\Account as ThreadsAccount;
-use BeePost\SocialPoster\Enums\AccountType;
-use BeePost\SocialPoster\Enums\ConnectionType;
 use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ThreadsController extends Controller
 {
@@ -22,43 +24,64 @@ class ThreadsController extends Controller
 
             return redirect()->away($url);
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: ' . $e->getMessage());
+            Log::error('Threads auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
     }
 
-    // public function handleThreadsCallback(Request $request)
-    // {
-    //     try {
-    //         $platform = MediaPlatform::where('slug', 'threads')->firstOrFail();
-    //         $code = $request->input('code');
-    //         info('Threads code is ' . $code);
+    public function handleThreadsCallback(Request $request)
+    {
+        if ($request->has('error')) {
+            Log::warning('Threads auth error returned from provider', [
+                'error' => $request->input('error'),
+                'error_description' => $request->input('error_description'),
+                'error_reason' => $request->input('error_reason'),
+            ]);
 
-    //         $tokenResponse = ThreadsAccount::getAccessToken($code, $platform);
-    //         info('Threads Token response is');
-    //         info($tokenResponse);
+            return redirect('/')->with('error', 'Threads authentication was cancelled or failed.');
+        }
 
-    //         $token = $tokenResponse['access_token'];
-    //         info('Threads token is ' . $token);
+        try {
+            $platform = MediaPlatform::where('slug', 'threads')->firstOrFail();
+            $code = $request->input('code');
+            if (! $code) {
+                Log::error('Threads callback missing authorization code', ['request_all' => $request->all()]);
 
-    //         $pages = ThreadsAccount::getAcccount($token, $platform);
-    //         info('Threads pages are');
-    //         info($pages);
+                return redirect('/')->with('error', 'Invalid response from Threads.');
+            }
 
+            Log::info('Threads callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
 
-    //         ThreadsAccount::saveThAccount(
-    //            $tokenResponse,
-    //            "web",
-    //            $platform,
-    //            AccountType::PROFILE->value,
-    //            ConnectionType::OFFICIAL->value,
-    //            null
-    //         );
+            $tokenResponse = ThreadsAccount::getAccessToken($code, $platform);
+            Log::info('Threads token response received', ['tokenResponse' => $tokenResponse]);
 
-    //         return redirect('/')->with('success', 'Threads account connected successfully!');
-    //     } catch (Exception $e) {
-    //         return redirect('/')->with('error', 'Error connecting account: ' . $e->getMessage());
-    //     }
-    // }
+            $token = $tokenResponse['access_token'];
+            $pages = ThreadsAccount::getAcccount($token, $platform);
+            Log::info('Threads pages received', ['pages' => $pages]);
+
+            ThreadsAccount::saveThAccount(
+                $tokenResponse,
+                'web',
+                $platform,
+                (string) AccountType::PROFILE->value,
+                (string) ConnectionType::OFFICIAL->value,
+                null
+            );
+
+            return redirect('/')->with('success', 'Threads account connected successfully!');
+        } catch (Exception $e) {
+            Log::error('Threads callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
+        }
+    }
 
     public function showUploadForm()
     {
@@ -85,11 +108,11 @@ class ThreadsController extends Controller
 
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = time().'_'.$file->getClientOriginalName();
                 $file->move(public_path('images'), $filename);
 
                 $fileModel = new File([
-                    'path' => 'images/' . $filename,
+                    'path' => 'images/'.$filename,
                 ]);
                 $post->setRelation('file', collect([$fileModel]));
             }
@@ -97,16 +120,23 @@ class ThreadsController extends Controller
             $threadsApi = new ThreadsAccount;
             $result = $threadsApi->send($post);
 
-            info('The result after calling the threads send method');
-            info(json_encode($result));
+            Log::info('Threads post upload result', ['result' => $result]);
 
             if (isset($result['status']) && $result['status'] === true) {
                 return back()->with('success', $result['response'] ?? 'Posted successfully!')->with('url', $result['url'] ?? null);
             } else {
-                return back()->with('error', 'Upload failed: ' . ($result['response'] ?? 'Unknown error'));
+                Log::error('Threads post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
+
+                return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
         } catch (Exception $e) {
-            return back()->with('error', 'Error: ' . $e->getMessage());
+            Log::error('Threads post upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('image'),
+            ]);
+
+            return back()->with('error', 'An unexpected error occurred during upload.');
         }
     }
 }

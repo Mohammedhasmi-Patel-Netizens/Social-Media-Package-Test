@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Core\File;
 use App\Models\MediaPlatform;
+use BeePost\SocialPoster\Enums\PostType;
+use BeePost\SocialPoster\Models\SocialAccount;
+use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\twitter\Account as TwitterAccount;
-use Illuminate\Http\Request;
 use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class TwitterController extends Controller
 {
@@ -18,34 +23,56 @@ class TwitterController extends Controller
             return redirect()->away($url);
 
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: ' . $e->getMessage());
+            Log::error('Twitter auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
     }
 
     public function handleTwitterCallback(Request $request)
     {
+        if ($request->has('error')) {
+            Log::warning('Twitter auth error returned from provider', [
+                'error' => $request->input('error'),
+                'error_description' => $request->input('error_description'),
+                'error_reason' => $request->input('error_reason'),
+            ]);
+
+            return redirect('/')->with('error', 'Twitter authentication was cancelled or failed.');
+        }
+
         try {
             $platform = MediaPlatform::where('slug', 'twitter')->firstOrFail();
             $code = $request->input('code');
-            info('Twitter code is ' . $code);
+            if (! $code) {
+                Log::error('Twitter callback missing authorization code', ['request_all' => $request->all()]);
+
+                return redirect('/')->with('error', 'Invalid response from Twitter.');
+            }
+
+            Log::info('Twitter callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
 
             $tokenResponse = TwitterAccount::getAccessToken($code, $platform);
-            info('Twitter Token response is');
-            info($tokenResponse);
+            Log::info('Twitter token response received', ['tokenResponse' => $tokenResponse]);
 
             $token = $tokenResponse['access_token'];
-            info('Twitter token is ' . $token);
 
-            $twitterAccount = new TwitterAccount();
+            $twitterAccount = new TwitterAccount;
 
             $pages = $twitterAccount->getAccount($token, $platform);
-            info('Twitter pages are');
-            info($pages);
-
+            Log::info('Twitter pages received', ['pages' => $pages]);
 
             return redirect('/')->with('success', 'Twitter account connected successfully!');
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: ' . $e->getMessage());
+            Log::error('Twitter callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
 
@@ -58,11 +85,11 @@ class TwitterController extends Controller
     {
         try {
             $platform = MediaPlatform::where('slug', 'twitter')->firstOrFail();
-            $account = \BeePost\SocialPoster\Models\SocialAccount::where('platform_id', $platform->id)->firstOrFail();
+            $account = SocialAccount::where('platform_id', $platform->id)->firstOrFail();
 
-            $post = new \BeePost\SocialPoster\Models\SocialPost([
+            $post = new SocialPost([
                 'content' => $request->input('content'),
-                'post_type' => \BeePost\SocialPoster\Enums\PostType::POST->value,
+                'post_type' => PostType::POST->value,
                 'account_id' => $account->id,
             ]);
 
@@ -71,11 +98,11 @@ class TwitterController extends Controller
             $fileModels = collect([]);
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = time().'_'.$file->getClientOriginalName();
                 $file->move(public_path('images'), $filename);
 
-                $fileModel = new \File([
-                    'path' => 'images/' . $filename,
+                $fileModel = new File([
+                    'path' => 'images/'.$filename,
                 ]);
                 $fileModels->push($fileModel);
             }
@@ -83,16 +110,23 @@ class TwitterController extends Controller
 
             $twitterApi = new TwitterAccount;
             $result = $twitterApi->send($post);
-            info('The result after calling the twitter send method');
-            info(json_encode($result));
+            Log::info('Twitter post upload result', ['result' => $result]);
 
             if ($result['status'] === true) {
                 return back()->with('success', $result['response'])->with('url', $result['url'] ?? null);
             } else {
-                return back()->with('error', 'Upload failed: ' . ($result['response'] ?? 'Unknown error'));
+                Log::error('Twitter post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
+
+                return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error uploading post: ' . $e->getMessage());
+            Log::error('Twitter post upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('image'),
+            ]);
+
+            return redirect('/')->with('error', 'An unexpected error occurred during upload.');
         }
     }
 }

@@ -11,7 +11,9 @@ use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\facebook\Account as FacebookAccount;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Exception;
+
 
 class FacebookController extends Controller
 {
@@ -24,25 +26,45 @@ class FacebookController extends Controller
             return redirect()->away($url);
 
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            Log::error('Facebook auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
     }
 
     public function handleFacebookCallback(Request $request)
     {
-        // 1. Fetch the Facebook platform
-        $platform = MediaPlatform::query()->where(['slug' => 'facebook'])->firstOrFail();
+        if ($request->has('error')) {
+            Log::warning('Facebook auth error returned from provider', [
+                'error' => $request->input('error'),
+                'error_description' => $request->input('error_description'),
+                'error_reason' => $request->input('error_reason'),
+            ]);
 
-        // 2. Get the authorization code returned by Facebook
-        $code = $request->input('code');
-        info('code is '.$code);
+            return redirect('/')->with('error', 'Facebook authentication was cancelled or failed.');
+        }
 
         try {
+            // 1. Fetch the Facebook platform
+            $platform = MediaPlatform::where('slug', 'facebook')->firstOrFail();
+
+            // 2. Get the authorization code returned by Facebook
+            $code = $request->input('code');
+            if (! $code) {
+                Log::error('Facebook callback missing authorization code', ['request_all' => $request->all()]);
+
+                return redirect('/')->with('error', 'Invalid response from Facebook.');
+            }
+
+            Log::info('Facebook callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
+
             // 3. Exchange the code for the access token
             $tokenResponse = FacebookAccount::getAccessToken($code, $platform);
 
-            info('Token response is');
-            info($tokenResponse);
+            Log::info('Facebook token response received', ['tokenResponse' => $tokenResponse]);
 
             // 4. Save the Facebook Account into your database using the package's method
             FacebookAccount::saveFbAccount(
@@ -55,8 +77,13 @@ class FacebookController extends Controller
 
             return redirect('/')->with('success', 'Facebook account connected successfully!');
         } catch (Exception $e) {
+            Log::error('Facebook callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             // Handle any API errors
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
 
@@ -94,20 +121,27 @@ class FacebookController extends Controller
                 $post->setRelation('file', collect([$fileModel]));
             }
 
-            $facebookApi = new FacebookAccount;
+            $facebookApi = new FacebookAccount();
             $result = $facebookApi->send($post);
 
-            info('The result after calling the facebook send method');
-            info(json_encode($result));
+            Log::info('Facebook post upload result', ['result' => $result]);
 
             if (isset($result['status']) && $result['status'] === true) {
                 return back()->with('success', $result['response'] ?? 'Posted successfully!')->with('url', $result['url'] ?? null);
             } else {
+                Log::error('Facebook post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
+
                 return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {
-            return back()->with('error', 'Error: '.$e->getMessage());
+            Log::error('Facebook post upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('image'),
+            ]);
+
+            return back()->with('error', 'An unexpected error occurred during upload.');
         }
     }
 }

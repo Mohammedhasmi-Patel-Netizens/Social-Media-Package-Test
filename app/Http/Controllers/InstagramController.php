@@ -9,9 +9,10 @@ use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\instagram\Account as InstagramAccount;
-use Illuminate\Http\Request;
 use Exception;
 use File;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class InstagramController extends Controller
 {
@@ -22,28 +23,39 @@ class InstagramController extends Controller
             $url = InstagramAccount::authRedirect($platform);
 
             return redirect()->away($url);
-        }catch(Exception $e){
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+        } catch (Exception $e) {
+            Log::error('Instagram auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
     }
 
     public function handleInstagramCallback(Request $request)
     {
         try {
+
+            if ($request->has('error')) {
+                Log::warning('Instagram auth error returned from provider', [
+                    'error' => $request->input('error'),
+                    'error_description' => $request->input('error_description'),
+                    'error_reason' => $request->input('error_reason'),
+                ]);
+
+                return redirect('/')->with('error', 'Instagram authentication was cancelled or failed.');
+            }
             $platform = MediaPlatform::where('slug', 'instagram')->firstOrFail();
             $code = $request->input('code');
-            info('code is '.$code);
-            $tokenResponse = InstagramAccount::getAccessToken($code, $platform);
-            info('Token response is');
-            info($tokenResponse);
+            if (! $code) {
+                Log::error('Instagram callback missing authorization code', ['request_all' => $request->all()]);
 
+                return redirect('/')->with('error', 'Invalid response from Instagram.');
+            }
+            $tokenResponse = InstagramAccount::getAccessToken($code, $platform);
             $token = $tokenResponse['access_token'];
-            
-            info('token is '.$token);
-            
             $pages = InstagramAccount::getAccounts($token, $platform);
-            info('pages are');
-            info($pages);
 
             InstagramAccount::saveIgAccount(
                 $pages,
@@ -56,8 +68,13 @@ class InstagramController extends Controller
             );
 
             return redirect('/')->with('success', 'Instagram account connected successfully!');
-        }catch(Exception $e){
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+        } catch (Exception $e) {
+            Log::error('Instagram callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
 
@@ -98,17 +115,24 @@ class InstagramController extends Controller
             $instagramApi = new InstagramAccount;
             $result = $instagramApi->send($post);
 
-            info('The result after calling the instagram send method');
-            info(json_encode($result));
+            Log::info('Instagram post upload result', ['result' => $result]);
 
             if (isset($result['status']) && $result['status'] === true) {
                 return back()->with('success', $result['response'] ?? 'Posted successfully!')->with('url', $result['url'] ?? null);
             } else {
+                Log::error('Instagram post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
+
                 return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {
-            return back()->with('error', 'Error: '.$e->getMessage());
+            Log::error('Instagram post upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('image'),
+            ]);
+
+            return back()->with('error', 'An unexpected error occurred during upload.');
         }
     }
 }

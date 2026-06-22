@@ -10,46 +10,59 @@ use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\youtube\Account as YoutubeAccount;
-use Illuminate\Http\Request;
 use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
-
-class OAuthController extends Controller
+class YoutubeController extends Controller
 {
     public function redirectToYoutube()
     {
         try {
-
             $platform = MediaPlatform::where('slug', 'youtube')->firstOrFail();
-
             $url = YoutubeAccount::authRedirect($platform);
 
             return redirect()->away($url);
         } catch (Exception $e) {
-            dd($e->getMessage());
+            Log::error('YouTube auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
 
     }
 
     public function handleYoutubeCallback(Request $request)
     {
-        // 1. Fetch the YouTube platform
-        $platform = MediaPlatform::query()->where(['slug' => 'youtube'])->firstOrFail();
+        if ($request->has('error')) {
+            Log::warning('YouTube auth error returned from provider', [
+                'error' => $request->input('error'),
+                'error_description' => $request->input('error_description'),
+                'error_reason' => $request->input('error_reason'),
+            ]);
 
-        // 2. Get the authorization code returned by Google
-        $code = $request->input('code');
-        info('code is '.$code);
-
-        if (! $code) {
-            return redirect('/')->with('error', 'YouTube Authentication failed or was cancelled.');
+            return redirect('/')->with('error', 'YouTube authentication was cancelled or failed.');
         }
 
         try {
+            // 1. Fetch the YouTube platform
+            $platform = MediaPlatform::where('slug', 'youtube')->firstOrFail();
+
+            // 2. Get the authorization code returned by Google
+            $code = $request->input('code');
+            if (! $code) {
+                Log::error('YouTube callback missing authorization code', ['request_all' => $request->all()]);
+
+                return redirect('/')->with('error', 'Invalid response from YouTube.');
+            }
+
+            Log::info('YouTube callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
+
             // 3. Exchange the code for the access token & refresh token
             $tokenResponse = YoutubeAccount::getAccessToken($code, $platform);
-
-            info('Tokenn response is');
-            info($tokenResponse);
+            Log::info('YouTube token response received', ['tokenResponse' => $tokenResponse]);
 
             // 4. Save the YouTube Account into your database using the package's method
             YoutubeAccount::saveYtAccount(
@@ -62,8 +75,13 @@ class OAuthController extends Controller
 
             return redirect('/')->with('success', 'YouTube account connected successfully!');
         } catch (Exception $e) {
+            Log::error('YouTube callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             // Handle any API errors
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
 
@@ -76,7 +94,6 @@ class OAuthController extends Controller
     {
         $request->validate([
             'title' => 'required|string|max:100',
-            // Increase max limit as needed (50000 = 50MB)
             'video' => 'required|mimes:mp4,mov,avi,webm|max:50000',
         ]);
 
@@ -111,11 +128,19 @@ class OAuthController extends Controller
             if ($result['status'] === true) {
                 return back()->with('success', $result['response'])->with('url', $result['url'] ?? null);
             } else {
+                Log::error('YouTube video upload failed at provider', ['result' => $result, 'post_content' => $request->input('title')]);
+
                 return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {
-            return back()->with('error', 'Error: '.$e->getMessage());
+            Log::error('YouTube video upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('video'),
+            ]);
+
+            return back()->with('error', 'An unexpected error occurred during upload.');
         }
     }
 }

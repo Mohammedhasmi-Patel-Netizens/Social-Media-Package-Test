@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Core\File;
 use App\Models\MediaPlatform;
 use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
-use Illuminate\Http\Request;
 use BeePost\SocialPoster\Services\Account\tiktok\Account as TikTokAccount;
 use Exception;
-use File;
-
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class TikTokController extends Controller
 {
@@ -23,34 +23,56 @@ class TikTokController extends Controller
             return redirect()->away($url);
 
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            Log::error('TikTok auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
     }
 
     public function handleTikTokCallback(Request $request)
     {
+        if ($request->has('error')) {
+            Log::warning('TikTok auth error returned from provider', [
+                'error' => $request->input('error'),
+                'error_description' => $request->input('error_description'),
+                'error_reason' => $request->input('error_reason'),
+            ]);
+
+            return redirect('/')->with('error', 'TikTok authentication was cancelled or failed.');
+        }
+
         try {
             $platform = MediaPlatform::where('slug', 'tiktok')->firstOrFail();
             $code = $request->input('code');
-            info('TikTok code is '.$code);
+            if (! $code) {
+                Log::error('TikTok callback missing authorization code', ['request_all' => $request->all()]);
+
+                return redirect('/')->with('error', 'Invalid response from TikTok.');
+            }
+
+            Log::info('TikTok callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
 
             $tokenResponse = TikTokAccount::getAccessToken($code, $platform);
-            info('TikTok Token response is');
-            info($tokenResponse);
+            Log::info('TikTok token response received', ['tokenResponse' => $tokenResponse]);
 
             $token = $tokenResponse['access_token'];
-            info('TikTok token is '.$token);
 
-            $tiktokAccount = new TikTokAccount();
+            $tiktokAccount = new TikTokAccount;
 
             $pages = $tiktokAccount->getAccount($token, $platform);
-            info('TikTok pages are');
-            info($pages);
+            Log::info('TikTok pages received', ['pages' => $pages]);
 
-            
             return redirect('/')->with('success', 'TikTok account connected successfully!');
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            Log::error('TikTok callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
 
@@ -81,16 +103,23 @@ class TikTokController extends Controller
 
             $tiktokApi = new TikTokAccount;
             $result = $tiktokApi->send($post);
-            info('The result after calling the youtube send method');
-            info(json_encode($result));
+            Log::info('TikTok video upload result', ['result' => $result]);
 
             if ($result['status'] === true) {
                 return back()->with('success', $result['response'])->with('url', $result['url'] ?? null);
             } else {
+                Log::error('TikTok video upload failed at provider', ['result' => $result, 'post_content' => $request->input('title')]);
+
                 return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error uploading video: '.$e->getMessage());
+            Log::error('TikTok video upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('video'),
+            ]);
+
+            return redirect('/')->with('error', 'An unexpected error occurred during upload.');
         }
     }
 

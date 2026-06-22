@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MediaPlatform;
 use BeePost\SocialPoster\Enums\AccountType;
 use BeePost\SocialPoster\Enums\ConnectionType;
 use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
-use Illuminate\Http\Request;
-use App\Models\MediaPlatform;
 use BeePost\SocialPoster\Services\Account\linkedin\Account as LinkedInAccount;
 use Exception;
 use File;
-
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class LinkedInController extends Controller
 {
@@ -24,21 +24,43 @@ class LinkedInController extends Controller
 
             return redirect()->away($url);
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            Log::error('LinkedIn auth redirect failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'Error connecting account. Please try again later.');
         }
     }
 
     public function handleLinkedInCallback(Request $request)
     {
+        if ($request->has('error')) {
+            Log::warning('LinkedIn auth error returned from provider', [
+                'error' => $request->input('error'),
+                'error_description' => $request->input('error_description'),
+                'error_reason' => $request->input('error_reason'),
+            ]);
+
+            return redirect('/')->with('error', 'LinkedIn authentication was cancelled or failed.');
+        }
+
         try {
             $platform = MediaPlatform::where('slug', 'linkedin')->firstOrFail();
-            $code = $request->input('code');
 
+            $code = $request->input('code');
+            if (! $code) {
+                Log::error('LinkedIn callback missing authorization code', ['request_all' => $request->all()]);
+
+                return redirect('/')->with('error', 'Invalid response from LinkedIn.');
+            }
+
+            Log::info('LinkedIn callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
 
             $tokenResponse = LinkedInAccount::getAccessToken($code, $platform);
-            info($tokenResponse);
+            Log::info('LinkedIn token response received', ['tokenResponse' => $tokenResponse->json()]);
 
-           LinkedInAccount::saveLdAccount(
+            LinkedInAccount::saveLdAccount(
                 $tokenResponse,
                 'web',
                 $platform,
@@ -51,7 +73,12 @@ class LinkedInController extends Controller
 
             return redirect('/')->with('success', 'LinkedIn account connected successfully!');
         } catch (Exception $e) {
-            return redirect('/')->with('error', 'Error connecting account: '.$e->getMessage());
+            Log::error('LinkedIn callback processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
 
@@ -92,17 +119,24 @@ class LinkedInController extends Controller
             $linkedinApi = new LinkedInAccount;
             $result = $linkedinApi->send($post);
 
-            info('The result after calling the linkedin send method');
-            info(json_encode($result));
+            Log::info('LinkedIn post upload result', ['result' => $result]);
 
             if (isset($result['status']) && $result['status'] === true) {
                 return back()->with('success', $result['response'] ?? 'Posted successfully!')->with('url', $result['url'] ?? null);
             } else {
+                Log::error('LinkedIn post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
+
                 return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {
-            return back()->with('error', 'Error: '.$e->getMessage());
+            Log::error('LinkedIn post upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except('image'),
+            ]);
+
+            return back()->with('error', 'An unexpected error occurred during upload.');
         }
     }
 }
