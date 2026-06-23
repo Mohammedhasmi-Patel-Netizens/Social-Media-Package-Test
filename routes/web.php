@@ -1,12 +1,13 @@
 <?php
 
+use App\Http\Controllers\FacebookController;
+use App\Http\Controllers\InstagramController;
 use App\Http\Controllers\LinkedInController;
+use App\Http\Controllers\ThreadsController;
 use App\Http\Controllers\TikTokController;
 use App\Http\Controllers\TwitterController;
 use App\Http\Controllers\YoutubeController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ThreadsController;
-
 
 Route::get('/', function () {
     return view('welcome');
@@ -15,18 +16,9 @@ Route::get('/', function () {
 Route::get('/auth/youtube/redirect', [YoutubeController::class, 'redirectToYoutube'])->name('youtube.redirect');
 Route::get('/account/youtube/callback', [YoutubeController::class, 'handleYoutubeCallback'])->name('youtube.callback');
 
-use App\Http\Controllers\FacebookController;
-
 Route::get('/auth/facebook/redirect', [FacebookController::class, 'redirectToFacebook'])->name('facebook.redirect');
 Route::get('/account/facebook/callback', [FacebookController::class, 'handleFacebookCallback'])->name('facebook.callback');
 
-// Helper required by the package that isn't defined globally
-if (! function_exists('filePath')) {
-    function filePath($file, $context)
-    {
-        return $file->path; // Returns path relative to public folder
-    }
-}
 
 Route::get('/auth/tiktok/redirect', [TikTokController::class, 'redirectToTikTok'])->name('tiktok.redirect');
 Route::get('/account/tiktok/callback', [TikTokController::class, 'handleTikTokCallback'])->name('tiktok.callback');
@@ -57,15 +49,12 @@ Route::get('/account/linkedin/callback', [LinkedInController::class, 'handleLink
 Route::get('/upload-linkedin', [LinkedInController::class, 'showUploadForm'])->name('linkedin.upload.form');
 Route::post('/upload-linkedin', [LinkedInController::class, 'uploadPost'])->name('linkedin.upload');
 
-use App\Http\Controllers\InstagramController;
-
 Route::get('/auth/instagram/redirect', [InstagramController::class, 'redirectToInstagram'])->name('instagram.redirect');
 Route::get('/account/instagram/callback', [InstagramController::class, 'handleInstagramCallback'])->name('instagram.callback');
 
 // Instagram upload routes
 Route::get('/upload-instagram', [InstagramController::class, 'showUploadForm'])->name('instagram.upload.form');
 Route::post('/upload-instagram', [InstagramController::class, 'uploadPost'])->name('instagram.upload');
-
 
 Route::get('/auth/threads/redirect', [ThreadsController::class, 'redirectToThreads'])->name('threads.redirect');
 Route::get('/account/threads/callback', [ThreadsController::class, 'handleThreadsCallback'])->name('threads.callback');

@@ -226,7 +226,7 @@ class Account implements PlatformAccountInterface
 
                     $fileURL = imageURL($file,"post",true);
 
-                    $imageContainer = $this->apiClient($token )
+                    $imageContainer = $this->apiClient($token, $configuration)
                     ->post(self::getApiUrl('rest/images', [
                         'action' => 'initializeUpload'
                     ],$configuration), [
@@ -235,7 +235,7 @@ class Account implements PlatformAccountInterface
                     ->json('value');
     
     
-                    $response = $this->apiClient($token)
+                    $response = $this->apiClient($token, $configuration)
                         ->attach('file', fopen($fileURL, 'r'))
                         ->post($imageContainer['uploadUrl']);
         
@@ -279,7 +279,7 @@ class Account implements PlatformAccountInterface
                         ...$attachMediaObj
                     ];
 
-                    $response = $this->apiClient($token)->post(self::getApiUrl('rest/posts',[],$configuration), $postData);
+                    $response = $this->apiClient($token, $configuration)->post(self::getApiUrl('rest/posts',[],$configuration), $postData);
 
 
                     if ($response->successful()) {
@@ -315,7 +315,7 @@ class Account implements PlatformAccountInterface
                     "isReshareDisabledByAuthor" => false
                 ];
 
-                $response = $this->apiClient($token)->post(self::getApiUrl('rest/posts', [], $configuration), $postData);
+                $response = $this->apiClient($token, $configuration)->post(self::getApiUrl('rest/posts', [], $configuration), $postData);
 
       
 
@@ -323,17 +323,17 @@ class Account implements PlatformAccountInterface
                 if ($response->successful()) {
 
                     return [
-                        'status'   =>true,
+                        'status' => true,
                         'response' => social_poster_trans("Posted Successfully"),
-                        'url'      => null
+                        'url' => null
                     ];
 
                 }
 
                 return [
-                    'status'   => false,
+                    'status' => false,
                     'response' => @$response->json('message') ?? social_poster_trans("Failed to post"),
-                    'url'      => null
+                    'url' => null
                 ];
 
             }
@@ -344,16 +344,16 @@ class Account implements PlatformAccountInterface
             $message = strip_tags($ex->getMessage());
          }
 
-         return [
-            'status'   => $status,
+        return [
+            'status' => $status,
             'response' => $message,
-            'url'      => null
+            'url' => null
         ];
 
     }
 
 
-    private function uploadImage(string $imagePath ,string $token , int | string $clinetId)
+    private function uploadImage(string $imagePath, string $token, int|string $clinetId)
     {
         $url = 'https://api.linkedin.com/v2/assets?action=registerUpload';
         $headers = [
@@ -373,7 +373,7 @@ class Account implements PlatformAccountInterface
 
         $imageResponse = Http::put($uploadUrl, [
             'Content-Type' => 'application/octet-stream',
-            'Authorization' => 'Bearer ' . $token ,
+            'Authorization' => 'Bearer ' . $token,
         ], file_get_contents($imagePath));
 
         return $imageResponse;
@@ -384,11 +384,12 @@ class Account implements PlatformAccountInterface
 
 
 
-    private function apiClient($token)
+    private function apiClient($token, $configuration = null)
     {
+        $apiVersion = @$configuration->api_version ?? config('platforms.linkedin.api_version', '202606');
         return Http::withHeaders([
             'X-Restli-Protocol-Version' => '2.0.0',
-            'LinkedIn-Version' => '202411',
+            'LinkedIn-Version' => $apiVersion,
         ])->withToken($token)->retry(1, 3000);
     }
 
@@ -431,7 +432,7 @@ class Account implements PlatformAccountInterface
             foreach ($metricTypes as $metricType) {
                 $apiUrl = self::API_URL . "/rest/memberCreatorPostAnalytics?q=entity&entity=(share:{$postUrn})&queryType={$metricType}&aggregation=TOTAL";
 
-                $response = $this->apiClient($token)->get($apiUrl);
+                $response = $this->apiClient($token, @$account->platform->configuration)->get($apiUrl);
 
                 if ($response->successful()) {
                     $data = $response->json();
@@ -490,7 +491,7 @@ class Account implements PlatformAccountInterface
 
             $apiUrl = self::getApiUrl('rest/posts', $params, $account->platform->configuration);
 
-            $apiResponse = $this->apiClient($token)->get($apiUrl);
+            $apiResponse = $this->apiClient($token, @$account->platform->configuration)->get($apiUrl);
             $apiResponse = $apiResponse->json();
 
             if ($apiResponse['errors'] ?? false) {

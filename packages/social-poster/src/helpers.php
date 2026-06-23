@@ -19,9 +19,25 @@ if (! function_exists('social_poster_response_status')) {
             return response_status($message, $type);
         }
         return [
-            'status'  => $type === 'success' || $type === 'ok',
+            'status' => $type === 'success' || $type === 'ok',
             'message' => $message,
-            'type'    => $type,
+            'type' => $type,
         ];
+    }
+}
+
+if (! function_exists('imageURL')) {
+    function imageURL($file, $context = 'post', $fullUrl = true)
+    {
+        // For local uploads with fopen(), we need the absolute system path.
+        // This avoids deadlocks when using 'php artisan serve' and allows reading the file.
+        return public_path($file->path);
+    }
+}
+
+if (! function_exists('filePath')) {
+    function filePath($file, $context)
+    {
+        return $file->path; // Returns path relative to public folder
     }
 }

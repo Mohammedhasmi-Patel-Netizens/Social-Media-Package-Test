@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Core\File;
 use App\Models\MediaPlatform;
 use BeePost\SocialPoster\Enums\AccountType;
 use BeePost\SocialPoster\Enums\ConnectionType;
@@ -9,10 +10,10 @@ use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\linkedin\Account as LinkedInAccount;
-use Exception;
-use File;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Exception;
+
 
 class LinkedInController extends Controller
 {
@@ -49,7 +50,7 @@ class LinkedInController extends Controller
             $platform = MediaPlatform::where('slug', 'linkedin')->firstOrFail();
 
             $code = $request->input('code');
-            if (! $code) {
+            if (!$code) {
                 Log::error('LinkedIn callback missing authorization code', ['request_all' => $request->all()]);
 
                 return redirect('/')->with('error', 'Invalid response from LinkedIn.');
@@ -60,13 +61,17 @@ class LinkedInController extends Controller
             $tokenResponse = LinkedInAccount::getAccessToken($code, $platform);
             Log::info('LinkedIn token response received', ['tokenResponse' => $tokenResponse->json()]);
 
+            $accessToken = $tokenResponse->json('access_token');
+            $userResponse = LinkedInAccount::getAccount($accessToken, $platform);
+            Log::info('LinkedIn user response received', ['userResponse' => $userResponse->json()]);
+
             LinkedInAccount::saveLdAccount(
-                $tokenResponse,
+                $userResponse->json(),
                 'web',
                 $platform,
                 (string) AccountType::PROFILE->value,
                 (string) ConnectionType::OFFICIAL->value,
-                $tokenResponse->json('access_token'),
+                $accessToken,
                 $tokenResponse->json('expires_in'),
                 null
             );
@@ -107,11 +112,11 @@ class LinkedInController extends Controller
 
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
-                $filename = time().'_'.$file->getClientOriginalName();
+                $filename = time() . '_' . $file->getClientOriginalName();
                 $file->move(public_path('images'), $filename);
 
                 $fileModel = new File([
-                    'path' => 'images/'.$filename,
+                    'path' => 'images/' . $filename,
                 ]);
                 $post->setRelation('file', collect([$fileModel]));
             }
@@ -126,7 +131,7 @@ class LinkedInController extends Controller
             } else {
                 Log::error('LinkedIn post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
 
-                return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
+                return back()->with('error', 'Upload failed: ' . ($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {
@@ -134,6 +139,8 @@ class LinkedInController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'request_data' => $request->except('image'),
+                'line_number' => $e->getLine(),
+                'file_path' => $e->getFile(),
             ]);
 
             return back()->with('error', 'An unexpected error occurred during upload.');
