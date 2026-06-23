@@ -204,6 +204,12 @@ TIKTOK_CLIENT_SECRET=your_client_secret
 TIKTOK_REDIRECT_URI="${APP_URL}/social/tiktok/callback"
 ```
 
+> [!WARNING]
+> **Twitter/X API Billing & Limitations**
+> To post to Twitter/X (even text-only tweets), your developer account must have a positive credit balance (minimum $5) in the X Developer Portal under the new Pay-Per-Use billing model. The API will throw a `402 Payment Required` error if your wallet is empty, even on the Free tier.
+> 
+> Additionally, the X API currently restricts media uploads via OAuth 2.0 User Context tokens. To upload images/videos, you must implement the legacy OAuth 1.0a flow for authenticating users.
+
 ---
 
 ## OAuth & Connection Flow

@@ -17,4 +17,8 @@ return [
         'graph_api_url' => env('LINKEDIN_GRAPH_API_URL', 'https://api.linkedin.com'),
         'api_version' => env('LINKEDIN_API_VERSION', '202606'),
     ],
+    'twitter' => [
+        'client_id' => env('TWITTER_CLIENT_ID'),
+        'client_secret' => env('TWITTER_CLIENT_SECRET'),
+    ],
 ];

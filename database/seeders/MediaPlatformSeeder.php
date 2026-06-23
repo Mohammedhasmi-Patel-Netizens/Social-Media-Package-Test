@@ -35,15 +35,27 @@ class MediaPlatformSeeder extends Seeder
         // );
 
         // 3.linkedin
+        // MediaPlatform::updateOrCreate(
+        //     ['slug' => 'linkedin'],
+        //     [
+        //         'name' => 'LinkedIn',
+        //         'configuration' => [
+        //             'client_id' => config('platforms.linkedin.client_id'),
+        //             'client_secret' => config('platforms.linkedin.client_secret'),
+        //             'graph_api_url' => config('platforms.linkedin.graph_api_url'),
+        //             'api_version' => config('platforms.linkedin.api_version', '202606'),
+        //         ],
+        //     ]
+        // );
+
+        // 4. Twitter (X)
         MediaPlatform::updateOrCreate(
-            ['slug' => 'linkedin'],
+            ['slug' => 'twitter'],
             [
-                'name' => 'LinkedIn',
+                'name' => 'Twitter',
                 'configuration' => [
-                    'client_id' => config('platforms.linkedin.client_id'),
-                    'client_secret' => config('platforms.linkedin.client_secret'),
-                    'graph_api_url' => config('platforms.linkedin.graph_api_url'),
-                    'api_version' => config('platforms.linkedin.api_version', '202606'),
+                    'client_id' => config('platforms.twitter.client_id'),
+                    'client_secret' => config('platforms.twitter.client_secret'),
                 ],
             ]
         );

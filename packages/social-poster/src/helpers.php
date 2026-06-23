@@ -7,6 +7,7 @@ if (! function_exists('social_poster_trans')) {
         if (function_exists('translate')) {
             return translate($message);
         }
+
         return $message;
     }
 }
@@ -18,6 +19,7 @@ if (! function_exists('social_poster_response_status')) {
         if (function_exists('response_status')) {
             return response_status($message, $type);
         }
+
         return [
             'status' => $type === 'success' || $type === 'ok',
             'message' => $message,
@@ -39,5 +41,15 @@ if (! function_exists('filePath')) {
     function filePath($file, $context)
     {
         return $file->path; // Returns path relative to public folder
+    }
+}
+
+if (! function_exists('isValidVideoUrl')) {
+    function isValidVideoUrl($url): bool
+    {
+        $extensions = ['mp4', 'mpeg', 'mpg', 'mov', 'avi', 'mkv'];
+        $extension = strtolower(pathinfo($url, PATHINFO_EXTENSION));
+
+        return in_array($extension, $extensions);
     }
 }

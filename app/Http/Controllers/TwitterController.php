@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Core\File;
 use App\Models\MediaPlatform;
+use BeePost\SocialPoster\Enums\AccountType;
+use BeePost\SocialPoster\Enums\ConnectionType;
 use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
@@ -56,20 +58,24 @@ class TwitterController extends Controller
             Log::info('Twitter callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
 
             $tokenResponse = TwitterAccount::getAccessToken($code, $platform);
-            Log::info('Twitter token response received', ['tokenResponse' => $tokenResponse]);
+            Log::info('Twitter token response received', ['tokenResponse' => $tokenResponse->json()]);
 
-            $token = $tokenResponse['access_token'];
-
-            $twitterAccount = new TwitterAccount;
-
-            $pages = $twitterAccount->getAccount($token, $platform);
-            Log::info('Twitter pages received', ['pages' => $pages]);
+            TwitterAccount::saveTwAccount(
+                $tokenResponse->json(),
+                'web',
+                $platform,
+                (string) AccountType::PROFILE->value,
+                (string) ConnectionType::OFFICIAL->value
+            );
 
             return redirect('/')->with('success', 'Twitter account connected successfully!');
         } catch (Exception $e) {
             Log::error('Twitter callback processing failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+
+                'exception_line' => $e->getLine(),
+                'exception_file' => $e->getFile(),
+                'exception_message' => $e->getMessage(),
+
             ]);
 
             return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
@@ -89,7 +95,7 @@ class TwitterController extends Controller
 
             $post = new SocialPost([
                 'content' => $request->input('content'),
-                'post_type' => PostType::POST->value,
+                'post_type' => PostType::FEED->value,
                 'account_id' => $account->id,
             ]);
 
