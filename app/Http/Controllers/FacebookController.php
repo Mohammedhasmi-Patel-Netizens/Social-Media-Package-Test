@@ -10,10 +10,9 @@ use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\facebook\Account as FacebookAccount;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Exception;
-
 
 class FacebookController extends Controller
 {
@@ -53,7 +52,7 @@ class FacebookController extends Controller
 
             // 2. Get the authorization code returned by Facebook
             $code = $request->input('code');
-            if (! $code) {
+            if (!$code) {
                 Log::error('Facebook callback missing authorization code', ['request_all' => $request->all()]);
 
                 return redirect('/')->with('error', 'Invalid response from Facebook.');
@@ -61,17 +60,18 @@ class FacebookController extends Controller
 
             Log::info('Facebook callback received code', ['request' => $request->all(), 'code_length' => strlen($code)]);
 
-            // 3. Exchange the code for the access token
             $tokenResponse = FacebookAccount::getAccessToken($code, $platform);
+            $token = $tokenResponse->json('access_token');
 
-            Log::info('Facebook token response received', ['tokenResponse' => $tokenResponse]);
+            Log::info('Facebook token response received', ['tokenResponse' => $tokenResponse->json()]);
 
-            // 4. Save the Facebook Account into your database using the package's method
+            $pages = FacebookAccount::getPagesInfo(['id,name,username,picture{url},access_token'], $platform, $token);
+
             FacebookAccount::saveFbAccount(
-                $tokenResponse,
+                $pages,
                 'web',
                 $platform,
-                (string) AccountType::PROFILE->value,
+                (string) AccountType::PAGE->value,
                 (string) ConnectionType::OFFICIAL->value
             );
 
@@ -82,7 +82,6 @@ class FacebookController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            // Handle any API errors
             return redirect('/')->with('error', 'An error occurred while connecting the account. Please try again.');
         }
     }
@@ -112,16 +111,16 @@ class FacebookController extends Controller
 
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
-                $filename = time().'_'.$file->getClientOriginalName();
+                $filename = time() . '_' . $file->getClientOriginalName();
                 $file->move(public_path('images'), $filename);
 
                 $fileModel = new File([
-                    'path' => 'images/'.$filename,
+                    'path' => 'images/' . $filename,
                 ]);
                 $post->setRelation('file', collect([$fileModel]));
             }
 
-            $facebookApi = new FacebookAccount();
+            $facebookApi = new FacebookAccount;
             $result = $facebookApi->send($post);
 
             Log::info('Facebook post upload result', ['result' => $result]);
@@ -131,7 +130,7 @@ class FacebookController extends Controller
             } else {
                 Log::error('Facebook post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
 
-                return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
+                return back()->with('error', 'Upload failed: ' . ($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {

@@ -49,13 +49,27 @@ class MediaPlatformSeeder extends Seeder
         // );
 
         // 4. Twitter (X)
+        // MediaPlatform::updateOrCreate(
+        //     ['slug' => 'twitter'],
+        //     [
+        //         'name' => 'Twitter',
+        //         'configuration' => [
+        //             'client_id' => config('platforms.twitter.client_id'),
+        //             'client_secret' => config('platforms.twitter.client_secret'),
+        //         ],
+        //     ]
+        // );
+
+        // 5. Instagram
         MediaPlatform::updateOrCreate(
-            ['slug' => 'twitter'],
+            ['slug' => 'instagram'],
             [
-                'name' => 'Twitter',
+                'name' => 'Instagram',
                 'configuration' => [
-                    'client_id' => config('platforms.twitter.client_id'),
-                    'client_secret' => config('platforms.twitter.client_secret'),
+                    'client_id' => config('platforms.instagram.client_id'),
+                    'client_secret' => config('platforms.instagram.client_secret'),
+                    'graph_api_url' => config('platforms.instagram.graph_api_url'),
+                    'app_version' => config('platforms.instagram.app_version', 'v20.0'),
                 ],
             ]
         );

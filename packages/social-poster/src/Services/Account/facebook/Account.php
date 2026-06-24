@@ -117,8 +117,6 @@ class Account implements PlatformAccountInterface
         ], $configuration);
 
         $response = Http::post($apiUrl);
-        
-        
 
         return $response;
     }
@@ -145,7 +143,7 @@ class Account implements PlatformAccountInterface
             'grant_type' => 'fb_exchange_token',
             'fb_exchange_token' => $token,
         ], $configuration);
-        
+
         $response = Http::post($apiUrl);
 
         return $response;
@@ -181,7 +179,7 @@ class Account implements PlatformAccountInterface
 
 
 
-    
+
     // public static function getPagesInfo(
     //     array $fields = ['name,username,picture,access_token'],
     //     MediaPlatform $mediaPlatform,
@@ -196,59 +194,42 @@ class Account implements PlatformAccountInterface
     //     ], $configuration);
 
     //     $response = Http::get($apiUrl);
-        
-        
-        
     //     return $response;
     // }
-    
     public static function getPagesInfo(
         array $fields = ['id,name,username,picture{url},access_token'],
         mixed $mediaPlatform,
         string $token
     ) {
-    
         $configuration = $mediaPlatform->configuration;
-    
-        
         $apiUrl = self::getApiUrl('/me/accounts', [
             'access_token' => $token,
-            'fields'       => collect($fields)->join(',')
+            'fields' => collect($fields)->join(',')
         ], $configuration);
-    
         $response = Http::get($apiUrl);
         $pages = $response->json('data');
-    
-       
         if (empty($pages)) {
             $debug = Http::get('https://graph.facebook.com/debug_token', [
-                'input_token'  => $token,
+                'input_token' => $token,
                 'access_token' => $configuration->client_id . '|' . $configuration->client_secret,
             ])->json();
-    
+
             $targetIds = collect($debug['data']['granular_scopes'] ?? [])
                 ->pluck('target_ids')
                 ->flatten()
                 ->unique();
-    
             $pages = [];
-    
             foreach ($targetIds as $pageId) {
                 $pageResponse = Http::get("https://graph.facebook.com/v20.0/{$pageId}", [
-                    'fields'       => collect($fields)->join(','),
+                    'fields' => collect($fields)->join(','),
                     'access_token' => $token,
                 ]);
-    
                 if ($pageResponse->successful()) {
                     $pages[] = $pageResponse->json();
                 }
             }
-    
-            
             return $pages;
         }
-    
-        
         return $pages;
     }
 
@@ -452,12 +433,41 @@ class Account implements PlatformAccountInterface
             }
 
 
-            if (isset($apiResponse['error'])) {
+            // if (isset($apiResponse['error'])) {
 
-                $this->disConnectAccount($account);
+            //     $this->disConnectAccount($account);
+            //     return [
+            //         'status' => false,
+            //         'message' => $apiResponse['error']['message']
+            //     ];
+            // }
+
+            if (isset($apiResponse['error'])) {
+                // We Will Verify with the meta server that current token is valid or not
+                $checkApi = $baseApi . "/" . $apiVersion . "/" . $account->account_id;
+                $checkResponse = Http::get($checkApi, [
+                    'access_token' => $token,
+                    'fields' => 'id'
+                ])->json();
+
+                /* 
+                    If still get error this time so now we are sure the token is invalid
+                        & we will continue to disconnect the account.
+                */
+                if (isset($checkResponse['error'])) {
+                    $this->disConnectAccount($account);
+                    return [
+                        'status' => false,
+                        'message' => $apiResponse['error']['message']
+                    ];
+                }
+
+                // If checkResponse is successful, the token is valid, but the read feed permission (pages_read_engagement) is missing.
+                // We return status true so that writing/posting can still proceed.
                 return [
-                    'status' => false,
-                    'message' => $apiResponse['error']['message']
+                    'status' => true,
+                    'response' => [],
+                    'page_insights' => [],
                 ];
             }
 
@@ -743,17 +753,20 @@ class Account implements PlatformAccountInterface
 
         if ($post->file && $post->file->count() > 0) {
 
-            $mediaFiles = [];
+            $uploadedMedia = collect([]);
+
             foreach ($post->file as $file) {
 
                 $response = $this->uploadMedia($file, $token, $platform, $pageid, $post->content);
                 if (isset($response['id'])) {
-                    $mediaFiles[] = ['media_fbid' => $response['id']];
+                    $uploadedMedia->push($response);
                 }
 
             }
 
-            $postData['attached_media'] = $mediaFiles;
+            $postData['attached_media'] = $uploadedMedia->map(function ($item) {
+                return ['media_fbid' => $item['id']];
+            })->toArray();
 
         }
 
@@ -782,10 +795,33 @@ class Account implements PlatformAccountInterface
 
         $fileURL = imageURL($file, "post", true);
 
-        $apiString = "/videos";
-
         $configuration = $platform->configuration;
 
+
+        if (file_exists($fileURL)) {
+            if (!isValidVideoUrl($fileURL)) {
+                $apiUrl = self::getApiUrl($pageid . '/photos', [], $configuration);
+                $uploadResponse = Http::retry(3, 3000)
+                    ->withToken($token)
+                    ->attach('source', fopen($fileURL, 'r'), basename($fileURL))
+                    ->post($apiUrl, [
+                        'published' => 'false',
+                    ]);
+            } else {
+                $apiUrl = self::getApiUrl($pageid . '/videos', [], $configuration);
+                $uploadResponse = Http::retry(3, 3000)
+                    ->withToken($token)
+                    ->attach('source', fopen($fileURL, 'r'), basename($fileURL))
+                    ->post($apiUrl, [
+                        'published' => 'false',
+                        'description' => $description ?? '',
+                    ]);
+            }
+
+            return $uploadResponse->json();
+        }
+
+        $apiString = "/videos";
 
         if (!isValidVideoUrl($fileURL)) {
 

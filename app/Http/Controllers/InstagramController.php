@@ -54,8 +54,9 @@ class InstagramController extends Controller
                 return redirect('/')->with('error', 'Invalid response from Instagram.');
             }
             $tokenResponse = InstagramAccount::getAccessToken($code, $platform);
-            $token = $tokenResponse['access_token'];
-            $pages = InstagramAccount::getAccounts($token, $platform);
+            $token = $tokenResponse->json('access_token');
+            $pagesResponse = InstagramAccount::getAccounts(['connected_instagram_account,name,access_token'], $platform, $token);
+            $pages = $pagesResponse->json('data') ?? [];
 
             InstagramAccount::saveIgAccount(
                 $pages,
