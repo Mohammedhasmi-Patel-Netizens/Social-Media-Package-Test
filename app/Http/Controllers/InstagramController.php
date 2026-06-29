@@ -9,10 +9,11 @@ use BeePost\SocialPoster\Enums\PostType;
 use BeePost\SocialPoster\Models\SocialAccount;
 use BeePost\SocialPoster\Models\SocialPost;
 use BeePost\SocialPoster\Services\Account\instagram\Account as InstagramAccount;
-use Exception;
-use File;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Models\Core\File;
+use Exception;
+
 
 class InstagramController extends Controller
 {
@@ -48,14 +49,15 @@ class InstagramController extends Controller
             }
             $platform = MediaPlatform::where('slug', 'instagram')->firstOrFail();
             $code = $request->input('code');
-            if (! $code) {
+
+            if (!$code) {
                 Log::error('Instagram callback missing authorization code', ['request_all' => $request->all()]);
 
                 return redirect('/')->with('error', 'Invalid response from Instagram.');
             }
             $tokenResponse = InstagramAccount::getAccessToken($code, $platform);
             $token = $tokenResponse->json('access_token');
-            $pagesResponse = InstagramAccount::getAccounts(['connected_instagram_account,name,access_token'], $platform, $token);
+            $pagesResponse = InstagramAccount::getAccounts(['instagram_business_account,name,access_token'], $platform, $token);
             $pages = $pagesResponse->json('data') ?? [];
 
             InstagramAccount::saveIgAccount(
@@ -104,11 +106,11 @@ class InstagramController extends Controller
 
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
-                $filename = time().'_'.$file->getClientOriginalName();
+                $filename = time() . '_' . $file->getClientOriginalName();
                 $file->move(public_path('images'), $filename);
 
                 $fileModel = new File([
-                    'path' => 'images/'.$filename,
+                    'path' => 'images/' . $filename,
                 ]);
                 $post->setRelation('file', collect([$fileModel]));
             }
@@ -123,7 +125,7 @@ class InstagramController extends Controller
             } else {
                 Log::error('Instagram post upload failed at provider', ['result' => $result, 'post_content' => $request->input('content')]);
 
-                return back()->with('error', 'Upload failed: '.($result['response'] ?? 'Unknown error'));
+                return back()->with('error', 'Upload failed: ' . ($result['response'] ?? 'Unknown error'));
             }
 
         } catch (Exception $e) {

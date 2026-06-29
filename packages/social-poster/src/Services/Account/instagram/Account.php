@@ -42,7 +42,8 @@ class Account implements PlatformAccountInterface
                     'business_management',
                     'instagram_basic',
                     'instagram_content_publish',
-                    'pages_read_engagement'
+                    'pages_read_engagement',
+                    'pages_show_list'
                 ];
 
             default:
@@ -65,7 +66,7 @@ class Account implements PlatformAccountInterface
      * @param bool $isBaseUrl
      * @return mixed
      */
-    public static function getApiUrl(string $endpoint, array $params = [], mixed $configuration, bool $isBaseUrl = false): mixed
+    public static function getApiUrl(string $endpoint, array $params = [], mixed $configuration = null, bool $isBaseUrl = false): mixed
     {
 
 
@@ -173,7 +174,7 @@ class Account implements PlatformAccountInterface
      * @param string $token
      * @return \Illuminate\Http\Client\Response
      */
-    public static function getAccounts(array $fields = ['connected_instagram_account,name,access_token'], mixed $mediaPlatform, string $token): \Illuminate\Http\Client\Response
+    public static function getAccounts(array $fields = ['connected_instagram_account,name,access_token'], mixed $mediaPlatform = null, string $token = ''): \Illuminate\Http\Client\Response
     {
 
         $configuration = $mediaPlatform->configuration;
@@ -183,7 +184,6 @@ class Account implements PlatformAccountInterface
             'fields' => collect($fields)->join(',')
         ], $configuration);
 
-        
 
         return Http::get($apiUrl);
     }
@@ -201,7 +201,7 @@ class Account implements PlatformAccountInterface
      * @param string $token
      * @return \Illuminate\Http\Client\Response
      */
-    public function getInstagramAccountInfo(string $accountId, array $fields = null, mixed $mediaPlatform, string $token): \Illuminate\Http\Client\Response
+    public function getInstagramAccountInfo(string $accountId, array $fields = null, mixed $mediaPlatform = null, string $token = ''): \Illuminate\Http\Client\Response
     {
 
         $configuration = $mediaPlatform->configuration;
@@ -233,23 +233,16 @@ class Account implements PlatformAccountInterface
         int|string $dbId = null
     ) {
 
-
-
-
-
+        
         $instagram = new self();
 
-
+        \Illuminate\Support\Facades\Log::info('Raw Meta Pages Response for Instagram:', ['pages' => $pages]);
 
         foreach ($pages as $page) {
 
+            if (isset($page['instagram_business_account']) && isset($page['instagram_business_account']['id'])) {
 
-
-
-            if (isset($page['connected_instagram_account']) && isset($page['connected_instagram_account']['id'])) {
-
-
-                $pageId = $page['connected_instagram_account']['id'];
+                $pageId = $page['instagram_business_account']['id'];
 
 
 
@@ -282,6 +275,9 @@ class Account implements PlatformAccountInterface
                     ];
 
                     $response = $instagram->saveAccount($guard, $mediaPlatform, $accountInfo, $account_type, $is_official, $dbId);
+                    if(!$response){
+                        dd("error ");
+                    }
 
 
                 } catch (\Exception $ex) {
@@ -764,8 +760,8 @@ class Account implements PlatformAccountInterface
         string $mediaId,
         int $delayInSeconds = 3,
         int $maxAttempts = 10,
-        mixed $platform,
-        string $token
+        mixed $platform = null,
+        string $token = ''
     ): array {
         $status = false;
         $attempted = 0;

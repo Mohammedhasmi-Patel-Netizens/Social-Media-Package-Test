@@ -386,7 +386,7 @@ class Account implements PlatformAccountInterface
 
     private function apiClient($token, $configuration = null)
     {
-        $apiVersion = @$configuration->api_version ?? config('platforms.linkedin.api_version', '202606');
+        $apiVersion = $configuration->api_version ?? config('platforms.linkedin.api_version', '202606');
         return Http::withHeaders([
             'X-Restli-Protocol-Version' => '2.0.0',
             'LinkedIn-Version' => $apiVersion,

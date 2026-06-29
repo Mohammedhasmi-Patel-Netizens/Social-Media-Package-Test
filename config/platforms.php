@@ -27,4 +27,8 @@ return [
         'graph_api_url' => env('INSTAGRAM_GRAPH_API_URL', 'https://graph.facebook.com'),
         'app_version' => env('INSTAGRAM_APP_VERSION', 'v20.0'),
     ],
+    'threads' => [
+        'client_id' => env('THREADS_CLIENT_ID'),
+        'client_secret' => env('THREADS_CLIENT_SECRET'),
+    ],
 ];

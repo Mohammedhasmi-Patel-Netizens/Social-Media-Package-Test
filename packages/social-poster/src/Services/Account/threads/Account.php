@@ -137,7 +137,7 @@ class Account implements PlatformAccountInterface
     /**
      * Save Threads account
      */
-    public  function saveThAccount(
+    public static function saveThAccount(
         mixed $responseData,
         string $guard,
         mixed $platform,
@@ -161,7 +161,6 @@ class Account implements PlatformAccountInterface
         $refresh_token = Arr::get($data, 'refresh_token');
 
         $response = $th->getAcccount($token, $platform)->throw();
-        
         $user = $response->json();
 
         $accountInfo = [
@@ -440,4 +439,10 @@ class Account implements PlatformAccountInterface
             ];
         }
     }
+
+    public static function getScopes(string $type = 'auth'): array
+    {
+        return [];
+    }
+
 }
