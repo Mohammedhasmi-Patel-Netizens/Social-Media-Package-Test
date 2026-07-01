@@ -91,11 +91,13 @@ class InstagramController extends Controller
         $request->validate([
             'content' => 'required|string|max:2000',
             'image' => 'nullable|mimes:jpeg,png,jpg,gif|max:10000',
+            'public_url' => 'nullable|url'
         ]);
 
         try {
             $platform = MediaPlatform::where('slug', 'instagram')->firstOrFail();
             $account = SocialAccount::where('platform_id', $platform->id)->firstOrFail();
+
 
             $post = new SocialPost([
                 'content' => $request->input('content'),
@@ -104,7 +106,12 @@ class InstagramController extends Controller
             ]);
             $post->setRelation('account', $account);
 
-            if ($request->hasFile('image')) {
+            if ($request->filled('public_url')) {
+                $fileModel = new File([
+                    'path' => $request->input('public_url'),
+                ]);
+                $post->setRelation('file', collect([$fileModel]));
+            } elseif ($request->hasFile('image')) {
                 $file = $request->file('image');
                 $filename = time() . '_' . $file->getClientOriginalName();
                 $file->move(public_path('images'), $filename);

@@ -300,10 +300,14 @@ class Account implements PlatformAccountInterface
 
             if (isset($publish['id'])) {
                 $postId = $publish['id'];
+
+                $postDetailsResponse = self::getPost($postId, $accountToken, $platform);
+                $permalink = $postDetailsResponse->json('permalink');
+
                 return [
                     'status' => true,
                     'response' => social_poster_trans("Posted Successfully"),
-                    'url' => "https://www.threads.net/@" . ($account->name ?? $account->account_id) . "/post/" . $postId,
+                    'url' => $permalink ?? ("https://www.threads.net/@" . ($account->name ?? $account->account_id) . "/post/" . $postId),
                     'post_id' => $postId,
                 ];
             }

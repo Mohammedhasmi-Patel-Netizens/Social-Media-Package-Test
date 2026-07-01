@@ -38,7 +38,7 @@ class Account implements PlatformAccountInterface
 
             case 'auth':
                 return [
-                    'ads_management',
+                    // 'ads_management',
                     'business_management',
                     'instagram_basic',
                     'instagram_content_publish',
@@ -233,7 +233,7 @@ class Account implements PlatformAccountInterface
         int|string $dbId = null
     ) {
 
-        
+
         $instagram = new self();
 
         \Illuminate\Support\Facades\Log::info('Raw Meta Pages Response for Instagram:', ['pages' => $pages]);
@@ -275,7 +275,7 @@ class Account implements PlatformAccountInterface
                     ];
 
                     $response = $instagram->saveAccount($guard, $mediaPlatform, $accountInfo, $account_type, $is_official, $dbId);
-                    if(!$response){
+                    if (!$response) {
                         dd("error ");
                     }
 
